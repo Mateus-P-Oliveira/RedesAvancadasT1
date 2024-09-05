@@ -1,0 +1,206 @@
+Trabalho 1 - Descrição
+O trabalho consiste em desenvolver um simulador de roteamento multicast. O simulador deve receber como parâmetros de execução o nome de um arquivo de descrição de topologia (conforme formato especificado), o identificador de uma subrede e o identificador de um grupo multicast. O simulador deve apresentar na saída as tabelas de roteamento unicast e multicast dos roteadores da topologia e as mensagens enviadas a partir da subrede para o grupo multicast definidos na entrada conforme o formato estabelecido.
+
+Formato do arquivo de descrição de topologia
+
+#SUBNET
+<sid>,<netaddr/mask>
+#ROUTER
+<rid>,<numifs>,<ip1/mask>,<weight1>,<ip2/mask>,<weight2>,<ip3/mask>,<weight3>...
+#MGROUP
+<mid>,<sid1>,<sid2>,...,<sidn>
+Formato de saída
+
+Cabeçalho das tabelas de roteamento unicast: #UROUTETABLE
+
+Entrada de roteamento unicast: <rid>, <netaddr/mask>,<nexthop>,<ifnum>
+
+Cabeçalho das tabelas de roteamento unicast: #MROUTETABLE
+
+Entrada de roteamento multicast: <rid>,<mid>,<nexthop1>,<ifnum1>,<nexthop2>,<ifnum2>,...,<nexthopn>,<ifnumn>
+
+Cabeçalho da transmissão para o grupo multicast: #TRACE
+
+Mensagem mping: <sid|rid> =>> <sid|rid>, ..., <sid|rid> =>> <sid|rid>: mping <mgroupid>;
+
+Funcionamento do simulador
+
+O simulador deve ter um comportamento similar ao do protocolo MOSPF, através da criação de árvores de rota mais curta para grupo multicast em cada roteador, e posteriormente criando a tabela de roteamento multicast. O simulador deve realizar a seguintes etapas:
+
+Criação das tabelas de roteamento unicast: utilizando as informações descritas no arquivo de topologia, deve ser criada a tabela de roteamento unicast para cada roteador, usando os pesos de cada link para definição do melhor caminho (quanto menor o peso, melhor é o caminho) e o algoritmo de Dijkstra.
+
+Criação das tabelas de roteamento multicast: utilizando as informações sobre as subredes interessadas em cada grupo multicast e a origem do fluxo multicast, deve ser criada uma árvore de rota mais curta para cada grupo, e, posteriormente criada a tabela de roteamento multicast para cada grupo em cada roteador
+
+Ping: utilizando a subrede e grupo multicast definidos na entrada, deve ser apresentado o envio de uma mensagem de ping, da subrede, chegando até todas as subredes interessadas no grupo
+
+Modo de execução do simulador
+
+$ simulador <topofile> <subnet> <multicast_group>
+EXEMPLO 1:
+
+Arquivo topologia.txt
+
+#SUBNET
+s1,10.0.0.0/8
+s2,20.0.0.0/8
+s3,30.0.0.0/8
+#ROUTER
+r1,3,10.0.0.1/8,1,20.0.0.1/8,1,30.0.0.1/8,1
+#MGROUP
+g1,s2,s3
+Exemplo de execução:
+
+$ simulador topologia.txt s1 g1
+#UROUTETABLE
+r1,10.0.0.0/8,0.0.0.0,0
+r1,20.0.0.0/8,0.0.0.0,1
+r1,30.0.0.0/8,0.0.0.0,2
+#MROUTETABLE
+r1,g1,0.0.0.0,1,0.0.0.0,2
+#TRACE
+s1 => r1 : mping g1;
+r1 => s2, r1 => s3 : mping g1;
+EXEMPLO 2:
+
+Arquivo topologia.txt
+
+#SUBNET
+s1,10.0.0.0/8
+s2,20.0.0.0/8
+s3,30.0.0.0/8
+#ROUTER
+r1,3,10.0.0.1/8,1,20.0.0.1/8,1,100.10.0.1/16,1
+r2,2,100.10.0.2/16,1,30.0.0.1/8,1
+#MGROUP
+g1,s2,s3
+Exemplo de execução:
+
+$ simulador topologia.txt s1 g1
+#UROUTETABLE
+r1,10.0.0.0/8,0.0.0.0,0
+r1,20.0.0.0/8,0.0.0.0,1
+r1,30.0.0.0/8,100.10.0.2,2
+r1,100.10.0.0/16,0.0.0.0,2
+r2,10.0.0.0/8,100.10.0.1,0
+r2,20.0.0.0/8,100.10.0.1,0
+r2,30.0.0.0/8,0.0.0.0,1
+r2,100.10.0.0/16,0.0.0.0,0
+#MROUTETABLE
+r1,g1,0.0.0.0,1,100.10.0.2,2
+r2,g1,0.0.0.0,1
+#TRACE
+s1 => r1 : mping g1;
+r1 => s2, r1 => r2 : mping g1;
+r2 => s3 : mping g1;
+EXEMPLO 3:
+
+Arquivo topologia.txt
+
+#SUBNET
+s1,10.0.0.0/8
+s2,20.0.0.0/8
+s3,30.0.0.0/8
+#ROUTER
+r1,3,10.0.0.1/8,1,100.10.0.1/16,1,100.20.0.1/16,1
+r2,2,100.10.0.2/16,1,20.0.0.1/8,1
+r3,2,100.20.0.2/16,1,30.0.0.1/8,1
+#MGROUP
+g1,s2,s3
+Exemplo de execução:
+
+$ simulador topologia.txt s1 g1
+#UROUTETABLE
+r1,10.0.0.0/8,0.0.0.0,0
+r1,20.0.0.0/8,100.10.0.2,1
+r1,30.0.0.0/8,100.20.0.2,2
+r1,100.10.0.0/16,0.0.0.0,1
+r1,100.20.0.0/16,0.0.0.0,2
+r2,10.0.0.0/8,100.10.0.1,0
+r2,20.0.0.0/8,0.0.0.0,1
+r2,30.0.0.0/8,100.10.0.1,0
+r2,100.10.0.0/16,0.0.0.0,0
+r2,100.20.0.0/16,100.10.0.1,0
+r3,10.0.0.0/8,100.20.0.1,0
+r3,20.0.0.0/8,100.20.0.1,0
+r3,30.0.0.0/8,0.0.0.0,1
+r3,100.10.0.0/16,100.20.0.1,0
+r3,100.20.0.0/16,0.0.0.0,0
+#MROUTETABLE
+r1,g1,10.10.0.2,1,100.20.0.2,2
+r2,g1,0.0.0.0,1
+r3,g1,0.0.0.0,1
+#TRACE
+s1 => r1 : mping g1;
+r1 => r2, r1 => r3 : mping g1;
+r2 => s2 : mping g1;
+r3 => s3 : mping g1;
+EXEMPLO 4:
+
+Arquivo topologia.txt
+
+#SUBNET
+s1,10.0.0.0/8
+s2,20.0.0.0/8
+s3,30.0.0.0/8
+#ROUTER
+r1,3,10.0.0.1/8,1,100.10.0.1/16,1,100.20.0.1/16,1
+r2,3,100.10.0.2/16,1,100.30.0.1/16,1,20.0.0.1/8,1
+r3,3,100.20.0.2/16,1,100.30.0.2/16,1,30.0.0.1/8,1
+#MGROUP
+g1,s2,s3
+Exemplo de execução:
+
+$ simulador topologia.txt s1 g1
+#UROUTETABLE
+r1,10.0.0.0/8,0.0.0.0,0
+r1,20.0.0.0/8,100.10.0.2,1
+r1,30.0.0.0/8,100.20.0.2,2
+r1,100.10.0.0/16,0.0.0.0,1
+r1,100.20.0.0/16,0.0.0.0,2
+r1,100.30.0.0/16,100.10.0.2,1
+r2,10.0.0.0/8,100.10.0.1,0
+r2,20.0.0.0/8,0.0.0.0,2
+r2,30.0.0.0/8,100.30.0.2,1
+r2,100.10.0.0/16,0.0.0.0,0
+r2,100.20.0.0/16,100.10.0.1,0
+r2,100.30.0.0/16,0.0.0.0,1
+r3,10.0.0.0/8,100.20.0.1,0
+r3,20.0.0.0/8,100.30.0.1,1
+r3,30.0.0.0/8,0.0.0.0,2
+r2,100.10.0.0/16,100.20.0.1,0
+r2,100.20.0.0/16,0.0.0.0,0
+r2,100.30.0.0/16,0.0.0.0,1
+#MROUTETABLE
+r1,g1,10.10.0.2,1,100.20.0.2,2
+r2,g1,0.0.0.0,2
+r3,g1,0.0.0.0,2
+#TRACE
+s1 => r1 : mping g1;
+r1 => r2, r1 => r3 : mping g1;
+r2 => s2 : mping g1;
+r3 => s3 : mping g1;
+Detalhes para construção do simulador:
+
+o simulador deve ser executado a partir de um terminal por linha de comando de acordo com o exemplo apresentado - não deve ser necessário utilizar uma IDE para executar o simulador!!!
+
+o simulador pode ser implementado em qualquer linguagem
+
+a entrada e saída devem respeitar EXATAMENTE os formatos apresentados
+
+o formato de saída é baseado na linguagem MsGenny. Sugere-se verificar se a saída está correta através do site https://sverweij.github.io/mscgen_js. Usar o cabeçalho “arcgradient=10;” para facilitar a visualização.
+
+Itens a serem entregues:
+
+código fonte
+
+relatório (em pdf) contendo: (i) detalhes de implementação (linguagem, classes, principais métodos); (ii) descrição de como utilizar o simulador com um exemplo de execução não visto em aula; (iii) limitações do simulador implementado e dificuldades de implementação.
+
+OBSERVAÇÕES
+
+O trabalho deve ser realizado em grupos de no máximo 3 alunos.
+
+Não serão aceitos trabalhos atrasados e/ou enviados por e-mail.
+
+Trabalhos que não compilam ou que não executam não serão avaliados.
+
+Todos os trabalhos serão analisados e comparados. Caso seja identificada cópia de trabalhos, todos os trabalhos envolvidos receberão nota ZERO!
