@@ -41,16 +41,17 @@ def read_topology_file(filename):
 # Função para criar a tabela de roteamento unicast usando o algoritmo de Dijkstra
 def dijkstra(routers):
     unicast_routes = defaultdict(dict)
-    
+
     for rid, interfaces in routers.items():
         distances = {rid: 0}
         previous_nodes = {rid: None}
         nodes = set([rid])
-        
+        interface_map = {iface.split('/')[0]: i for i, (iface, _) in enumerate(interfaces)}
+
         while nodes:
             current_node = min(nodes, key=lambda node: distances.get(node, float('inf')))
             nodes.remove(current_node)
-            
+
             for iface, weight in interfaces:
                 neighbor = iface.split('/')[0]
                 if neighbor not in distances:
@@ -60,12 +61,15 @@ def dijkstra(routers):
                     distances[neighbor] = new_distance
                     previous_nodes[neighbor] = current_node
                     nodes.add(neighbor)
-        
+
         for node in distances:
             next_hop = previous_nodes[node]
             if next_hop:
-                unicast_routes[rid][node] = (next_hop, next_hop) # Simplificado, melhorar para ifnum
+                ifnum = interface_map.get(node, '0')  # Default ifnum to '0' if not found
+                unicast_routes[rid][node] = (next_hop, ifnum)
+
     return unicast_routes
+
 
 # Função para criar a tabela de roteamento multicast
 def create_multicast_routes(subnets, routers, multicast_groups):
