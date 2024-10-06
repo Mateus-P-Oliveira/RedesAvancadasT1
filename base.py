@@ -28,7 +28,7 @@ def read_topology_file(filename):
                     parts = line.split(',')
                     rid = parts[0]
                     numifs = int(parts[1])
-                    interfaces = [(parts[i], int(parts[i + 1])) for i in range(2, 2 + numifs * 2, 2)]
+                    interfaces = [(parts[i].split('/')[0], int(parts[i + 1])) for i in range(2, 2 + numifs * 2, 2)]
                     routers[rid] = interfaces
                 elif current_section == 'mgroup':
                     parts = line.split(',')
@@ -68,16 +68,16 @@ def dijkstra(routers, subnets):
         for node in distances:
             if node in previous_nodes and previous_nodes[node] is not None:
                 next_hop = previous_nodes[node]
-                
+
                 # Ajuste para buscar a sub-rede correta
                 subnet = next((sub for sub in subnets.values() if sub.startswith(node)), None)
 
                 # Encontre o índice da interface correspondente ao next_hop
                 ifnum = next((i for i, (iface, _) in enumerate(interfaces) if iface.split('/')[0] == next_hop), None)
-                
+
                 if subnet is not None and ifnum is not None:
                     unicast_routes[rid][subnet] = (next_hop, ifnum)
-                    
+
     return unicast_routes
 
 # Função para criar a tabela de roteamento multicast
