@@ -1,126 +1,130 @@
-import heapq
 import sys
+import heapq
 from collections import defaultdict
 
-# Função para ler o arquivo de descrição de topologia
-def read_topology_file(filename):
-    subnets = {}
-    routers = {}
-    multicast_groups = {}
-    
-    try:
-        with open(filename, 'r') as file:
-            lines = file.readlines()
-            
-            current_section = None
-            for line in lines:
-                line = line.strip()
-                if line.startswith("#SUBNET"):
-                    current_section = 'subnet'
-                elif line.startswith("#ROUTER"):
-                    current_section = 'router'
-                elif line.startswith("#MGROUP"):
-                    current_section = 'mgroup'
-                elif line and not line.startswith("#"):
-                    if current_section == 'subnet':
-                        sid, netinfo = line.split(',', 1)
-                        subnets[sid] = netinfo
-                    elif current_section == 'router':
-                        parts = line.split(',')
-                        rid = parts[0]
-                        numifs = int(parts[1])
-                        interfaces = [(parts[i], int(parts[i+1])) for i in range(2, 2 + numifs * 2, 2)]
-                        routers[rid] = interfaces
-                    elif current_section == 'mgroup':
-                        parts = line.split(',')
-                        mid = parts[0]
-                        subnets_list = parts[1:]
-                        multicast_groups[mid] = subnets_list
-    except Exception as e:
-        print(f"Error reading the file: {e}")
-        sys.exit(1)
-    
-    return subnets, routers, multicast_groups
+class Router:
+    def __init__(self, rid):
+        self.rid = rid
+        self.interfaces = []
+        self.unicast_routes = {}
+        self.multicast_routes = defaultdict(list)
 
-# Função para criar a tabela de roteamento unicast usando o algoritmo de Dijkstra
-def dijkstra(routers):
-    unicast_routes = defaultdict(dict)
+    def add_interface(self, netaddr, weight):
+        self.interfaces.append((netaddr, weight))
 
-    for rid, interfaces in routers.items():
-        distances = {rid: 0}
-        previous_nodes = {rid: None}
-        nodes = set([rid])
-        interface_map = {iface.split('/')[0]: i for i, (iface, _) in enumerate(interfaces)}
+class Subnet:
+    def __init__(self, sid, netaddr):
+        self.sid = sid
+        self.netaddr = netaddr
 
-        while nodes:
-            current_node = min(nodes, key=lambda node: distances.get(node, float('inf')))
-            nodes.remove(current_node)
+class MulticastGroup:
+    def __init__(self, mid, subnets):
+        self.mid = mid
+        self.subnets = subnets
 
-            for iface, weight in interfaces:
-                neighbor = iface.split('/')[0]
-                if neighbor not in distances:
-                    distances[neighbor] = float('inf')
-                new_distance = distances[current_node] + weight
-                if new_distance < distances[neighbor]:
-                    distances[neighbor] = new_distance
-                    previous_nodes[neighbor] = current_node
-                    nodes.add(neighbor)
+def dijkstra(routers, start_router):
+    unicast_routes = {}
+    priority_queue = [(0, start_router)]
+    visited = set()
 
-        for node in distances:
-            if node in routers:  # Garante que o node é um roteador
-                next_hop = previous_nodes[node]
-                if next_hop:
-                    ifnum = interface_map.get(node, '0')  # Default ifnum to '0' if not found
-                    unicast_routes[rid][node] = (next_hop, ifnum)
+    while priority_queue:
+        current_weight, current_router = heapq.heappop(priority_queue)
+
+        if current_router in visited:
+            continue
+
+        visited.add(current_router)
+        unicast_routes[current_router] = current_weight
+
+        for interface, weight in routers[current_router].interfaces:
+            next_router = interface[0]  # Assumindo que a interface contém o endereço do próximo roteador
+            if next_router not in visited:
+                heapq.heappush(priority_queue, (current_weight + weight, next_router))
 
     return unicast_routes
 
-# Função para criar a tabela de roteamento multicast
-def create_multicast_routes(subnets, routers, multicast_groups):
-    multicast_routes = defaultdict(dict)
-    
-    for mid, subnets_list in multicast_groups.items():
-        for subnet in subnets_list:
-            if subnet in routers:
-                # Implementar o cálculo da árvore de rota mais curta
-                pass
-    
-    return multicast_routes
+def build_unicast_tables(routers):
+    for router in routers:
+        routers[router].unicast_routes = dijkstra(routers, router)
 
-# Função para simular o ping multicast
-def simulate_multicast_ping(subnet_id, group_id, subnets, multicast_groups):
-    print("#TRACE")
-    # Implementar a lógica de ping multicast aqui
+def build_multicast_tables(routers, multicast_groups):
+    for mg in multicast_groups:
+        mid = mg.mid
+        for subnet in mg.subnets:
+            for router in routers:
+                # Lógica para construir a tabela de roteamento multicast
+                # Utiliza-se a tabela unicast como referência
+                pass  # Completar com lógica de construção
 
-# Função principal para executar o simulador
-def main(filename, subnet_id, group_id):
-    subnets, routers, multicast_groups = read_topology_file(filename)
-    
-    # Criação das tabelas de roteamento unicast
-    unicast_routes = dijkstra(routers)
+def ping(source_subnet, multicast_group, routers):
+    trace = []
+    for router in routers:
+        if multicast_group in routers[router].multicast_routes:
+            for nexthop, ifnum in routers[router].multicast_routes[multicast_group]:
+                trace.append(f"{router} => {nexthop} : mping {multicast_group};")
+
+    return trace
+
+def read_topology(file):
+    routers = {}
+    subnets = {}
+    multicast_groups = []
+
+    with open(file) as f:
+        lines = f.readlines()
+
+    for line in lines:
+        if line.startswith("#SUBNET"):
+            continue
+        elif line.startswith("#ROUTER"):
+            parts = line.strip().split(',')
+            rid = parts[0]
+            numifs = int(parts[1])
+            router = Router(rid)
+
+            for i in range(numifs):
+                ip_mask = parts[2 + i * 2]
+                weight = int(parts[2 + i * 2 + 1])
+                router.add_interface(ip_mask, weight)
+
+            routers[rid] = router
+        elif line.startswith("#MGROUP"):
+            parts = line.strip().split(',')
+            mid = parts[0]
+            group_subnets = parts[1:]
+            multicast_groups.append(MulticastGroup(mid, group_subnets))
+
+    return routers, subnets, multicast_groups
+
+def main():
+    if len(sys.argv) != 4:
+        print("Uso: simulador <topofile> <subnet> <multicast_group>")
+        return
+
+    topofile, subnet_id, multicast_group_id = sys.argv[1:]
+
+    routers, subnets, multicast_groups = read_topology(topofile)
+    build_unicast_tables(routers)
+    build_multicast_tables(routers, multicast_groups)
+
+    # Exibir as tabelas de roteamento unicast
     print("#UROUTETABLE")
-    for rid, routes in unicast_routes.items():
-        for net, (nexthop, ifnum) in routes.items():
-            print(f"{rid},{net},{nexthop},{ifnum}")
-    
-    # Criação das tabelas de roteamento multicast
-    multicast_routes = create_multicast_routes(subnets, routers, multicast_groups)
+    for router in routers:
+        for netaddr, nexthop in routers[router].unicast_routes.items():
+            print(f"{router},{netaddr},{nexthop},<ifnum>")  # <ifnum> a ser definido
+
+    # Exibir as tabelas de roteamento multicast
     print("#MROUTETABLE")
-    for rid, routes in multicast_routes.items():
-        for mid, nexthops in routes.items():
-            nexthop_list = ','.join(f"{nh},{ifnum}" for nh, ifnum in nexthops)
-            print(f"{rid},{mid},{nexthop_list}")
-    
-    # Simulação do ping multicast
-    simulate_multicast_ping(subnet_id, group_id, subnets, multicast_groups)
+    for router in routers:
+        for mid in multicast_groups:
+            if mid.mid in routers[router].multicast_routes:
+                nexthops = routers[router].multicast_routes[mid.mid]
+                print(f"{router},{mid.mid}," + ",".join([f"{nexthop},{ifnum}" for nexthop, ifnum in nexthops]))
+
+    # Simular o ping
+    trace = ping(subnet_id, multicast_group_id, routers)
+    print("#TRACE")
+    print("\n".join(trace))
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        print("Usage: python simulator.py <topology_file> <subnet_id> <group_id>")
-        sys.exit(1)
-    
-    topology_file = sys.argv[1]
-    subnet_id = sys.argv[2]
-    group_id = sys.argv[3]
-    
-    main(topology_file, subnet_id, group_id)
+    main()

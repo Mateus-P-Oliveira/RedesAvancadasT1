@@ -7,10 +7,10 @@ def read_topology_file(filename):
     subnets = {}
     routers = {}
     multicast_groups = {}
-    
+
     with open(filename, 'r') as file:
         lines = file.readlines()
-        
+
         current_section = None
         for line in lines:
             line = line.strip()
@@ -28,59 +28,68 @@ def read_topology_file(filename):
                     parts = line.split(',')
                     rid = parts[0]
                     numifs = int(parts[1])
-                    interfaces = [(parts[i], int(parts[i+1])) for i in range(2, 2+numifs*2, 2)]
+                    interfaces = [(parts[i], int(parts[i + 1])) for i in range(2, 2 + numifs * 2, 2)]
                     routers[rid] = interfaces
                 elif current_section == 'mgroup':
                     parts = line.split(',')
                     mid = parts[0]
                     subnets_list = parts[1:]
                     multicast_groups[mid] = subnets_list
-    
+
     return subnets, routers, multicast_groups
 
 # Função para criar a tabela de roteamento unicast usando o algoritmo de Dijkstra
-def dijkstra(routers):
+def dijkstra(routers, subnets):
     unicast_routes = defaultdict(dict)
 
     for rid, interfaces in routers.items():
         distances = {rid: 0}
         previous_nodes = {rid: None}
-        nodes = set([rid])
-        interface_map = {iface.split('/')[0]: i for i, (iface, _) in enumerate(interfaces)}
+        priority_queue = [(0, rid)]  # (distance, router)
 
-        while nodes:
-            current_node = min(nodes, key=lambda node: distances.get(node, float('inf')))
-            nodes.remove(current_node)
+        while priority_queue:
+            current_distance, current_router = heapq.heappop(priority_queue)
+
+            if current_distance > distances.get(current_router, float('inf')):
+                continue
 
             for iface, weight in interfaces:
-                neighbor = iface.split('/')[0]
+                neighbor = iface.split('/')[0]  # Pega apenas o IP
                 if neighbor not in distances:
                     distances[neighbor] = float('inf')
-                new_distance = distances[current_node] + weight
+
+                new_distance = current_distance + weight
+
                 if new_distance < distances[neighbor]:
                     distances[neighbor] = new_distance
-                    previous_nodes[neighbor] = current_node
-                    nodes.add(neighbor)
+                    previous_nodes[neighbor] = current_router
+                    heapq.heappush(priority_queue, (new_distance, neighbor))
 
         for node in distances:
-            next_hop = previous_nodes[node]
-            if next_hop:
-                ifnum = interface_map.get(node, '0')  # Default ifnum to '0' if not found
-                unicast_routes[rid][node] = (next_hop, ifnum)
+            if node in previous_nodes and previous_nodes[node] is not None:
+                next_hop = previous_nodes[node]
+                
+                # Ajuste para buscar a sub-rede correta
+                subnet = next((sub for sub in subnets.values() if sub.startswith(node)), None)
 
+                # Encontre o índice da interface correspondente ao next_hop
+                ifnum = next((i for i, (iface, _) in enumerate(interfaces) if iface.split('/')[0] == next_hop), None)
+                
+                if subnet is not None and ifnum is not None:
+                    unicast_routes[rid][subnet] = (next_hop, ifnum)
+                    
     return unicast_routes
-
 
 # Função para criar a tabela de roteamento multicast
 def create_multicast_routes(subnets, routers, multicast_groups):
     multicast_routes = defaultdict(dict)
-    
+
     for mid, subnets_list in multicast_groups.items():
         for subnet in subnets_list:
             if subnet in routers:
                 # Implementar o cálculo da árvore de rota mais curta
                 pass
-    
+
     return multicast_routes
 
 # Função para simular o ping multicast
@@ -93,7 +102,7 @@ def main(filename, subnet_id, group_id):
     subnets, routers, multicast_groups = read_topology_file(filename)
     
     # Criação das tabelas de roteamento unicast
-    unicast_routes = dijkstra(routers)
+    unicast_routes = dijkstra(routers, subnets)
     print("#UROUTETABLE")
     for rid, routes in unicast_routes.items():
         for net, (nexthop, ifnum) in routes.items():
