@@ -36,65 +36,47 @@ def read_topology_file(filename):
                     subnets_list = parts[1:]
                     multicast_groups[mid] = subnets_list
 
-    print("Subnets:", subnets)  # Verifica as sub-redes
-    print("Routers:", routers)  # Verifica a estrutura dos roteadores
-    print("Multicast Groups:", multicast_groups)  # Verifica os grupos multicast
-
     return subnets, routers, multicast_groups
-
 
 # Função para criar a tabela de roteamento unicast usando o algoritmo de Dijkstra
 def dijkstra(routers, subnets):
     unicast_routes = defaultdict(dict)
-    graph = defaultdict(list)
 
-    # Criar o grafo a partir dos routers e suas interfaces
     for rid, interfaces in routers.items():
-        for iface, weight in interfaces:
-            graph[rid].append((iface.split('/')[0], weight))  # Pega apenas o IP
-
-    for rid in routers.keys():
         distances = {rid: 0}
         previous_nodes = {rid: None}
-        priority_queue = [(0, rid)]
+        nodes = set([rid])
+        
+        while nodes:
+            current_node = min(nodes, key=lambda node: distances.get(node, float('inf')))
+            nodes.remove(current_node)
 
-        while priority_queue:
-            current_distance, current_router = heapq.heappop(priority_queue)
-
-            if current_distance > distances.get(current_router, float('inf')):
-                continue
-
-            for neighbor, weight in graph[current_router]:
+            for iface, weight in interfaces:
+                neighbor = iface.split('/')[0]
                 if neighbor not in distances:
                     distances[neighbor] = float('inf')
-
-                new_distance = current_distance + weight
-
+                new_distance = distances[current_node] + weight
                 if new_distance < distances[neighbor]:
                     distances[neighbor] = new_distance
-                    previous_nodes[neighbor] = current_router
-                    heapq.heappush(priority_queue, (new_distance, neighbor))
+                    previous_nodes[neighbor] = current_node
+                    nodes.add(neighbor)
 
         # Montar as rotas unicast
         for node in distances:
-            if node in previous_nodes and previous_nodes[node] is not None:
-                next_hop = previous_nodes[node]
-
+            next_hop = previous_nodes[node]
+            if next_hop:
                 # Encontrar a sub-rede correspondente
                 subnet = next((sub for sub in subnets.keys() if subnets[sub].startswith(node)), None)
-
+                
                 if subnet is not None:
                     # Encontrar o índice da interface correspondente ao next_hop
-                    ifnum = None
-                    for i, (iface, _) in enumerate(routers[rid]):
-                        if iface.split('/')[0] == next_hop:
-                            ifnum = i
-                            break  # Saia do loop assim que encontrar
-
+                    ifnum = next((i for i, (iface, _) in enumerate(routers[rid]) if iface.split('/')[0] == next_hop), None)
                     if ifnum is not None:
                         unicast_routes[rid][subnet] = (next_hop, ifnum)
 
     return unicast_routes
+
+
 
 
 
@@ -105,7 +87,6 @@ def create_multicast_routes(subnets, routers, multicast_groups, unicast_routes):
 
     for mid, subnets_list in multicast_groups.items():
         for subnet_id in subnets_list:
-            # Aqui, vamos procurar os roteadores que têm rotas para as sub-redes de interesse
             for rid, routes in unicast_routes.items():
                 if subnet_id in routes:
                     nexthop, ifnum = routes[subnet_id]
@@ -116,14 +97,14 @@ def create_multicast_routes(subnets, routers, multicast_groups, unicast_routes):
     return multicast_routes
 
 
-
 # Função para simular o ping multicast
 def simulate_multicast_ping(subnet_id, group_id, subnets, multicast_groups):
     print("#TRACE")
     if subnet_id in subnets and group_id in multicast_groups:
-        print(f"{subnet_id} => r1 : mping {group_id};")
+        print(f"{subnet_id} => r1 : mping {group_id};")  # Assume que o roteador é r1
         for target in multicast_groups[group_id]:
             print(f"r1 => {target} : mping {group_id};")
+
 
 
 # Função principal para executar o simulador
