@@ -42,17 +42,27 @@ def read_topology_file(filename):
 def dijkstra(routers, subnets):
     unicast_routes = defaultdict(dict)
 
-    for rid, interfaces in routers.items():
+    for rid in routers:
         distances = {rid: 0}
         previous_nodes = {rid: None}
-        nodes = set([rid])
+        nodes = set(routers.keys())
         
         while nodes:
             current_node = min(nodes, key=lambda node: distances.get(node, float('inf')))
             nodes.remove(current_node)
 
-            for iface, weight in interfaces:
-                neighbor = iface.split('/')[0]
+            if current_node not in routers:
+                continue
+
+            for iface, weight in routers[current_node]:
+                neighbor = iface.split('/')
+                print(f"Current Node: {current_node}, Interface: {iface}, Neighbor: {neighbor}")  # Depuração
+                if isinstance(neighbor, list):
+                    print(f"Neighbor is a list: {neighbor}")  # Depuração
+                    neighbor = neighbor
+                if not isinstance(neighbor, str):
+                    print(f"Neighbor is not a string: {neighbor}")  # Depuração
+                    continue
                 if neighbor not in distances:
                     distances[neighbor] = float('inf')
                 new_distance = distances[current_node] + weight
@@ -61,20 +71,19 @@ def dijkstra(routers, subnets):
                     previous_nodes[neighbor] = current_node
                     nodes.add(neighbor)
 
-        # Montar as rotas unicast
         for node in distances:
-            next_hop = previous_nodes[node]
-            if next_hop:
-                # Encontrar a sub-rede correspondente
-                subnet = next((sub for sub in subnets.keys() if subnets[sub].startswith(node)), None)
-                
-                if subnet is not None:
-                    # Encontrar o índice da interface correspondente ao next_hop
-                    ifnum = next((i for i, (iface, _) in enumerate(routers[rid]) if iface.split('/')[0] == next_hop), None)
-                    if ifnum is not None:
-                        unicast_routes[rid][subnet] = (next_hop, ifnum)
+            if node != rid:
+                next_hop = previous_nodes[node]
+                if next_hop:
+                    subnet = next((sub for sub in subnets.keys() if subnets[sub].startswith(node)), None)
+                    if subnet is not None:
+                        ifnum = next((i for i, (iface, _) in enumerate(routers[rid]) if iface.split('/') == next_hop), None)
+                        if ifnum is not None:
+                            unicast_routes[rid][subnet] = (next_hop, ifnum)
 
     return unicast_routes
+
+
 
 
 
@@ -97,6 +106,7 @@ def create_multicast_routes(subnets, routers, multicast_groups, unicast_routes):
     return multicast_routes
 
 
+
 # Função para simular o ping multicast
 def simulate_multicast_ping(subnet_id, group_id, subnets, multicast_groups):
     print("#TRACE")
@@ -104,6 +114,7 @@ def simulate_multicast_ping(subnet_id, group_id, subnets, multicast_groups):
         print(f"{subnet_id} => r1 : mping {group_id};")  # Assume que o roteador é r1
         for target in multicast_groups[group_id]:
             print(f"r1 => {target} : mping {group_id};")
+
 
 
 
@@ -128,6 +139,7 @@ def main(filename, subnet_id, group_id):
 
     # Simulação do ping multicast
     simulate_multicast_ping(subnet_id, group_id, subnets, multicast_groups)
+
 
 
 
