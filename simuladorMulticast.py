@@ -83,9 +83,9 @@ def dijkstra(routers, subnets):
         # Registrar rotas unicast
         for node in distances:
             print(f"Node: {node}")  # Log para depuração
-            print("~~~~~~~~")
+            
             print(f"Distances: {distances}")  # Log para depuração
-            print("________________")
+            
 
             if node != rid:  # Ignora o próprio roteador
                 print(f"Checking node: {node}")  # Log para depuração
